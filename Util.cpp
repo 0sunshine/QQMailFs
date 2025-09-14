@@ -2,6 +2,7 @@
 
 #include <iconv.h>
 #include <iostream>
+#include <mutex>
 
 static const char* utf7_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
 
@@ -129,67 +130,61 @@ std::string mUtf7ToGbk(const std::string& in)
     return Unicode16leToGbk(u16);
 }
 
-char*
-imap_utf7_utf8(const char* in)
+std::string ImapTagGen::GetNextTag()
 {
-    const unsigned char* inptr = (unsigned char*)in;
-    unsigned char c;
-    int shifted = 0;
-    guint32 v = 0;
-    GString* out;
-    gunichar u;
-    char* buf;
-    int i = 0;
+    ++_seq;
 
-    out = g_string_new("");
+    int32_t seq = _seq;
+    std::string tag = _baseTag;
 
-    while (*inptr) {
-        c = *inptr++;
 
-        if (shifted) {
-            if (c == '-') {
-                /* shifted back to US-ASCII */
-                shifted = 0;
-            }
-            else {
-                /* base64 decode */
-                if (utf7_rank[c] == 0xff)
-                    goto exception;
+    int n = 0;
 
-                v = (v << 6) | utf7_rank[c];
-                i += 6;
-
-                if (i >= 16) {
-                    u = (v >> (i - 16)) & 0xffff;
-                    g_string_append_unichar(out, u);
-                    i -= 16;
-                }
-            }
-        }
-        else if (c == '&') {
-            if (*inptr == '-') {
-                g_string_append_c(out, '&');
-                inptr++;
-            }
-            else {
-                /* shifted to modified UTF-7 */
-                shifted = 1;
-            }
-        }
-        else {
-            g_string_append_c(out, c);
-        }
+    if (n < 10)
+    {
+        n = 1;
+    }
+    else if (n < 100)
+    {
+        n = 2;
+    }
+    else if (n < 1000)
+    {
+        n = 3;
+    }
+    else if (n < 10000)
+    {
+        n = 4;
     }
 
-    if (shifted) {
-    exception:
-        g_warning("Invalid UTF-7 encoded string: '%s'", in);
-        g_string_free(out, TRUE);
-        return g_strdup(in);
+    while (n++ < 4)
+    {
+        tag.push_back('0');
     }
 
-    buf = out->str;
-    g_string_free(out, FALSE);
+    return tag + std::to_string(seq);
+}
 
-    return buf;
+ImapTagGen ImapTagGen::Create()
+{
+    static std::mutex s_mutex;
+    static char s_base[] = "AAAA";
+
+    std::lock_guard lg(s_mutex);
+
+    ImapTagGen gen(s_base);
+
+    for (int i = sizeof(s_base) - 2; i >= 0; --i)
+    {
+        if (s_base[i] == 'Z')
+        {
+            s_base[i] = 'A';
+            continue;
+        }
+
+        ++s_base[i];
+        break;
+    }
+
+    return gen;
 }

@@ -135,10 +135,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AsioIOScheduler.cpp" />
+    <ClCompile Include="ImapResponseParser.cpp" />
+    <ClCompile Include="Log.cpp" />
     <ClCompile Include="QQMailFs.cpp" />
     <ClCompile Include="Util.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AsioIOScheduler.h" />
+    <ClInclude Include="ImapResponseParser.h" />
+    <ClInclude Include="IOSchedulerBase.h" />
+    <ClInclude Include="Log.h" />
     <ClInclude Include="Util.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

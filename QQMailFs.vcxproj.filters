@@ -21,9 +21,30 @@
     <ClCompile Include="Util.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="AsioIOScheduler.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="ImapResponseParser.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Log.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Util.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="IOSchedulerBase.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="AsioIOScheduler.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ImapResponseParser.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Log.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
