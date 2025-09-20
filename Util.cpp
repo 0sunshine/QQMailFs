@@ -1,4 +1,5 @@
 #include "Util.h"
+#include "base64.h"
 
 #include <iconv.h>
 #include <iostream>
@@ -128,6 +129,113 @@ std::string mUtf7ToGbk(const std::string& in)
     std::string u16 = mUtf7ToUnicode16le(in);
 
     return Unicode16leToGbk(u16);
+}
+
+std::string Utf8ToGbk(const std::string& in)
+{
+    const char* utf8_str = in.c_str();
+    char* in_ptr = (char*)utf8_str;
+    size_t in_len = in.size();
+
+    std::string gbk_str;
+    gbk_str.resize(in.size());
+
+    char* out_ptr = (char*)&gbk_str[0];
+    size_t out_len = gbk_str.size();
+
+    iconv_t cd = iconv_open("gbk", "utf-8");
+
+    if ((iconv_t)-1 == cd)
+    {
+        std::cout << errno << std::endl;
+        return "";
+    }
+
+    size_t result = iconv(cd, &in_ptr, &in_len, &out_ptr, &out_len);
+    iconv_close(cd);
+
+    gbk_str.resize(gbk_str.size() - out_len);
+    //*out_ptr = '\0'; // Ìí¼Ó×Ö·û´®½áÊø·û
+
+    return gbk_str;
+}
+
+std::string Base64ToGbk(const std::string& in)
+{
+    if (in.size() < 2)
+    {
+        return in;
+    }
+
+    std::string_view inView(in);
+
+    if (in.front() == '\"' && in.back() == '\"')
+    {
+        inView = inView.substr(1, in.size() - 2);
+    }
+
+    int isGbk = 0;
+
+    std::string::size_type pos = std::string::npos;
+
+    static const char* s_fmts[] = { "0=?utf-8?B?", "1=?gbk?B?", "0=?UTF-8?B?", "1=?GBK?B?"};
+
+    for (auto c : s_fmts)
+    {
+        isGbk = *c == '0' ? 0 : 1;
+        c += 1;
+        pos = inView.find(c);
+        if (pos == std::string::npos)
+        {
+            continue;
+        }
+
+        if (pos != 0)
+        {
+            return in;
+        }
+
+        pos += strlen(c);
+        break;
+    }
+
+    std::string_view base64View;
+
+    if (pos == std::string::npos) //default is utf8
+    {
+        pos = 0;
+        isGbk = 0;
+        base64View = inView;
+    }
+    else
+    {
+        if (inView.size() < pos + 2 + 1)
+        {
+            return in;
+        }
+
+        if (inView[inView.size() - 2] != '?' || inView[inView.size() - 1] != '=')
+        {
+            return in;
+        }
+
+        base64View = inView.substr(pos, inView.size() - pos - 2);
+    }
+        
+
+    auto str = base64_decode(base64View);
+
+    if (!isGbk)
+    {
+        return Utf8ToGbk(str);
+    }
+
+    return str;
+}
+
+std::string Base64Decode(const std::string_view& in)
+{
+    return base64_decode(in);
 }
 
 std::string ImapTagGen::GetNextTag()

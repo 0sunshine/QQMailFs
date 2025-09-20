@@ -136,6 +136,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AsioIOScheduler.cpp" />
+    <ClCompile Include="base64.cpp" />
+    <ClCompile Include="ImapQQParser.cpp" />
     <ClCompile Include="ImapResponseParser.cpp" />
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="QQMailFs.cpp" />
@@ -143,6 +145,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AsioIOScheduler.h" />
+    <ClInclude Include="base64.h" />
+    <ClInclude Include="ImapQQParser.h" />
     <ClInclude Include="ImapResponseParser.h" />
     <ClInclude Include="IOSchedulerBase.h" />
     <ClInclude Include="Log.h" />

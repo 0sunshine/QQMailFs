@@ -5,6 +5,7 @@
 
 #include <string.h>
 #include <iostream>
+#include <stack>
 
 ImapResponseParser::ImapResponseParser(IOClientBase& client)
     :_client(client)
@@ -278,36 +279,154 @@ int ImapResponseParser::WaitFetch(FetchResponse& res)
     std::string line;
     int ret = 0;
 
+    std::stack<FetchResponse::DataItem*> stack;
+    std::string currWord;
+
     while ((ret = GetLineMsg(line)) > 0)
     {
         std::string_view token;
         int offset = 0;
 
-        offset = GetNextToken(token, line);
-        if (offset < 0 || token.empty() || token[0] == '*')
+        if (stack.empty())
         {
-            res.ignoreLines.push_back(line);
+            offset = GetNextToken(token, line);
+            if (offset < 0 || token.empty())
+            {
+                res.ignoreLines.push_back(line);
+                continue;
+            }
+
+            if (res.tag == token)
+            {
+                res.desc = line;
+
+                offset = GetNextToken(token, line, offset);
+                if (offset < 0 || token.empty())
+                {
+                    LOG_FMT_ERROR("wait fetch status error, line: %s", line.c_str());
+                    return -1;
+                }
+
+                res.status = token;
+
+                return 0;
+            }
+
+            if (token != "*")
+            {
+                res.ignoreLines.push_back(line);
+                continue;
+            }
+
+
+            offset = GetNextToken(token, line, offset);
+            if (offset < 0 || token.empty())
+            {
+                res.ignoreLines.push_back(line);
+                continue;
+            }
+
+            std::string_view thirdtoken;
+            offset = GetNextToken(thirdtoken, line, offset);
+            if (offset < 0 || thirdtoken.empty() || thirdtoken != "FETCH")
+            {
+                res.ignoreLines.push_back(line);
+                continue;
+            }
+
+            while (line[offset++] != '(')
+            {
+                if (offset > line.size())
+                {
+                    LOG_FMT_ERROR("fetch no (, line: %s", line.c_str());
+                    return -1;
+                }
+            }
+
+            auto& part = res.parts.emplace_back();
+            part.idx = res.parts.size() + 1;
+            part.unparsedItems.emplace_back();
+
+            auto& item = part.unparsedItems.back();
+
+            stack.push(&item);
+        }
+
+        if (stack.empty())
+        {
             continue;
         }
 
-        if (res.tag != token)
+        if (line.empty())
         {
-            res.ignoreLines.push_back(line);
-            continue;
+            auto& topItem = stack.top();
+            if (!currWord.empty())
+            {
+                topItem->arrayType.emplace_back();
+                topItem->arrayType.back().strType = currWord;
+                currWord.clear();
+            }
+
+            topItem->arrayType.emplace_back();
+            topItem->arrayType.back().strType = "\r\n";
         }
 
-        res.desc = line;
-
-        offset = GetNextToken(token, line, offset);
-        if (offset < 0 || token.empty())
+        //遇到(创建新对象压栈，字符串赋值self, )出栈
+        for(int i = offset; i < line.size(); ++i)
         {
-            LOG_FMT_ERROR("wait login status error, line: %s", line.c_str());
-            return -1;
+            if (stack.empty())
+            {
+                LOG_FMT_ERROR("fetch stack.empty(), but still has unparse string, line: %s", line.c_str());
+                return -1;
+            }
+
+            auto& topItem = stack.top();
+            auto c = line[i];
+
+            if (c != '(' && c != ')' && c != ' ')
+            {
+                currWord.push_back(c);
+                continue;
+            }
+
+            if (c == ' ')
+            {
+                if (!currWord.empty())
+                {
+                    topItem->arrayType.emplace_back();
+                    topItem->arrayType.back().strType = currWord;
+                    currWord.clear();
+                }
+
+                continue;
+            }
+            else if (c == '(')
+            {
+                if (!currWord.empty())
+                {
+                    topItem->arrayType.emplace_back();
+                    topItem->arrayType.back().strType = currWord;
+                    currWord.clear();
+                }
+
+                topItem->arrayType.emplace_back();
+                auto& item = topItem->arrayType.back();
+                stack.push(&item);
+                continue;
+            }
+            else if (c == ')')
+            {
+                if (!currWord.empty())
+                {
+                    topItem->arrayType.emplace_back();
+                    topItem->arrayType.back().strType = currWord;
+                    currWord.clear();
+                }
+                stack.pop();
+                continue;
+            }
         }
 
-        res.status = token;
-
-        return 0;
     }
 
     return ret;

@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <vector>
 #include <queue>
+#include <memory>
 
 struct CommonResponse
 {
@@ -43,11 +44,68 @@ struct SearchResponse : CommonResponse
     std::list<std::string> numbers;
 };
 
+
+// * 3 FETCH 
+//(
+//	BODYSTRUCTURE 
+//		(
+//			(
+//				(
+//					"TEXT" 
+//					"PLAIN" 
+//						(
+//							"charset" "utf-8"
+//						) 
+//					NIL 
+//					NIL 
+//					"BASE64" 
+//					94 
+//					3 
+//					NIL 
+//					NIL 
+//					NIL
+//				)
+//				(
+//					"TEXT" 
+//					"HTML" 
+//						(
+//							"charset" "utf-8"
+//						) 
+//					NIL 
+//					NIL 
+//					"BASE64" 
+//					2584 
+//					36 
+//					NIL 
+//					NIL 
+//					NIL
+//				) 
+//				"ALTERNATIVE" 
+//					(
+//						"BOUNDARY" "----=_NextPart_68C6B29E_0005D1E0_36BA156E"
+//					) 
+//					NIL 
+//					NIL
+//			)
+//		)
+//)
 struct FetchResponse : CommonResponse
 {
+    struct DataItem
+    {
+        std::string strType;
+        std::vector<DataItem> arrayType;
+    };
 
+
+    struct Part
+    {
+        int32_t idx;
+        std::list<DataItem> unparsedItems;
+    };
+
+    std::vector<Part> parts;
 };
-
 
 class ImapResponseParser
 {

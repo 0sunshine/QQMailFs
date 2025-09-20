@@ -4,6 +4,7 @@
 #include "Log.h"
 #include "AsioIOScheduler.h"
 #include "ImapResponseParser.h"
+#include "ImapQQParser.h"
 
 #include <fstream>
 
@@ -149,7 +150,7 @@ void go(IOClientBase& client)
         nextCmdTag = tagGen.GetNextTag();
         fetchRes.tag = nextCmdTag;
 
-        msg = nextCmdTag + R"xxx( FETCH 3 (BODYSTRUCTURE  BODY[2]))xxx" "\r\n";
+        msg = nextCmdTag + R"xxx( FETCH 1,2,3 (BODYSTRUCTURE BODY[1] BODY[2] BODY[3]))xxx" "\r\n";
 
         ret = client.Write((uint8_t*)msg.c_str(), msg.size());
         if (ret < 0)
@@ -166,6 +167,25 @@ void go(IOClientBase& client)
         }
     }
 
+    ImapQQParser qqParser;
+    std::vector<QQFetchResult> qqFetchResults;
+
+    qqParser.ParseBodyStructure(fetchRes, qqFetchResults);
+
+    qqParser.ParseBodySection(fetchRes, qqFetchResults);
+
+
+    for (auto& fetch : qqFetchResults)
+    {
+        for (auto& file : fetch.files)
+        {
+            std::ofstream fout("./" + file.gbkName, std::ios::binary);
+            if (!fout) continue;
+            fout.write(&file.binData[0], file.binData.size());
+            fout.close();
+        }
+        
+    }
 
     LOG_FMT_DEBUG("end...");
 }
