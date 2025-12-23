@@ -107,6 +107,15 @@ struct FetchResponse : CommonResponse
     std::vector<Part> parts;
 };
 
+struct AppendResponse
+{
+    std::string tag;
+    std::string status;
+    std::string desc;
+
+    std::vector<std::string> ignoreLines;
+};
+
 class ImapResponseParser
 {
     static const int BufferSize = 1024 * 64;
@@ -120,6 +129,7 @@ public:
     int WaitSelect(SelectResponse& res);
     int WaitSearch(SearchResponse& res);
     int WaitFetch(FetchResponse& res);
+    int WaitAppend(AppendResponse& res);
 
 private:
     int TryFromCache(std::string& line);

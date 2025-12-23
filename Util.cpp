@@ -160,6 +160,35 @@ std::string Utf8ToGbk(const std::string& in)
     return gbk_str;
 }
 
+std::string GbkToUtf8(const std::string& in)
+{
+    const char* gbk_str = in.c_str();
+    char* in_ptr = (char*)gbk_str;
+    size_t in_len = in.size();
+
+    std::string utf8_str;
+    utf8_str.resize(in.size() * 4);
+
+    char* out_ptr = (char*)&utf8_str[0];
+    size_t out_len = utf8_str.size();
+
+    iconv_t cd = iconv_open("gbk", "utf-8");
+
+    if ((iconv_t)-1 == cd)
+    {
+        std::cout << errno << std::endl;
+        return "";
+    }
+
+    size_t result = iconv(cd, &in_ptr, &in_len, &out_ptr, &out_len);
+    iconv_close(cd);
+
+    utf8_str.resize(utf8_str.size() - out_len);
+    //*out_ptr = '\0'; // Ìí¼Ó×Ö·û´®½áÊø·û
+
+    return utf8_str;
+}
+
 std::string Base64ToGbk(const std::string& in)
 {
     if (in.size() < 2)
@@ -236,6 +265,11 @@ std::string Base64ToGbk(const std::string& in)
 std::string Base64Decode(const std::string_view& in)
 {
     return base64_decode(in);
+}
+
+std::string Base64Encode(const std::string_view& in)
+{
+    return base64_encode(in);
 }
 
 std::string ImapTagGen::GetNextTag()

@@ -10,8 +10,10 @@ std::string mUtf7ToUnicode16le(const std::string& in);
 std::string Unicode16leToGbk(const std::string& in);
 std::string mUtf7ToGbk(const std::string& in);
 std::string Utf8ToGbk(const std::string& in);
+std::string GbkToUtf8(const std::string& in);
 std::string Base64ToGbk(const std::string& in);
 std::string Base64Decode(const std::string_view& in);
+std::string Base64Encode(const std::string_view& in);
 
 class ImapTagGen
 {

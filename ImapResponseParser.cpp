@@ -281,6 +281,7 @@ int ImapResponseParser::WaitFetch(FetchResponse& res)
 
     std::stack<FetchResponse::DataItem*> stack;
     std::string currWord;
+    int currWordBracket = 0;
 
     while ((ret = GetLineMsg(line)) > 0)
     {
@@ -383,9 +384,26 @@ int ImapResponseParser::WaitFetch(FetchResponse& res)
             auto& topItem = stack.top();
             auto c = line[i];
 
+
+            if (currWordBracket > 0)
+            {
+                currWord.push_back(c);
+                if (c == ']')
+                {
+                    currWordBracket--;
+                }
+                continue;
+            }
+
             if (c != '(' && c != ')' && c != ' ')
             {
                 currWord.push_back(c);
+
+                if (c == '[')
+                {
+                    currWordBracket++;
+                }
+
                 continue;
             }
 
@@ -396,6 +414,7 @@ int ImapResponseParser::WaitFetch(FetchResponse& res)
                     topItem->arrayType.emplace_back();
                     topItem->arrayType.back().strType = currWord;
                     currWord.clear();
+                    currWordBracket = 0;
                 }
 
                 continue;
@@ -421,12 +440,60 @@ int ImapResponseParser::WaitFetch(FetchResponse& res)
                     topItem->arrayType.emplace_back();
                     topItem->arrayType.back().strType = currWord;
                     currWord.clear();
+                    currWordBracket = 0;
                 }
                 stack.pop();
                 continue;
             }
         }
 
+    }
+
+    return ret;
+}
+
+int ImapResponseParser::WaitAppend(AppendResponse& res)
+{
+    std::string line;
+    int ret = 0;
+
+    while ((ret = GetLineMsg(line)) > 0)
+    {
+        std::string_view token;
+        int offset = 0;
+
+        offset = GetNextToken(token, line);
+
+        if (offset < 0 || token.empty() || token[0] == '*')
+        {
+            res.ignoreLines.push_back(line);
+            continue;
+        }
+
+        if (token[0] == '+')
+        {
+            res.desc = line;
+            return 0;
+        }
+
+        if (res.tag != token)
+        {
+            res.ignoreLines.push_back(line);
+            continue;
+        }
+
+        res.desc = line;
+
+        offset = GetNextToken(token, line, offset);
+        if (offset < 0 || token.empty())
+        {
+            LOG_FMT_ERROR("wait append status error, line: %s", line.c_str());
+            return -1;
+        }
+
+        res.status = token;
+
+        return 0;
     }
 
     return ret;

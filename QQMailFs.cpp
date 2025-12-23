@@ -7,6 +7,7 @@
 #include "ImapQQParser.h"
 
 #include <fstream>
+#include "MailMessage.h"
 
 std::string gUsername;
 std::string gPassword;
@@ -145,46 +146,94 @@ void go(IOClientBase& client)
         }
     }
 
-    FetchResponse fetchRes;
+    //FetchResponse fetchRes;
+    //{
+    //    nextCmdTag = tagGen.GetNextTag();
+    //    fetchRes.tag = nextCmdTag;
+
+    //    msg = nextCmdTag + R"xxx( FETCH 1,2,3 (BODY[HEADER.FIELDS (SUBJECT FROM)] BODYSTRUCTURE BODY[1] BODY[2] BODY[3]))xxx" "\r\n";
+
+    //    ret = client.Write((uint8_t*)msg.c_str(), msg.size());
+    //    if (ret < 0)
+    //    {
+    //        LOG_FMT_ERROR("command FETCH, Write failed, %d", ret);
+    //        return;
+    //    }
+
+    //    ret = parser.WaitFetch(fetchRes);
+    //    if (ret < 0)
+    //    {
+    //        LOG_FMT_ERROR("WaitFetch failed, %d", ret);
+    //        return;
+    //    }
+    //}
+
+    //ImapQQParser qqParser;
+    //std::vector<QQFetchResult> qqFetchResults;
+
+    //qqParser.ParseBodyStructure(fetchRes, qqFetchResults);
+
+    //qqParser.ParseBodySection(fetchRes, qqFetchResults);
+
+
+    //for (auto& fetch : qqFetchResults)
+    //{
+    //    for (auto& file : fetch.files)
+    //    {
+    //        std::ofstream fout("./" + file.gbkName, std::ios::binary);
+    //        if (!fout) continue;
+    //        fout.write(&file.binData[0], file.binData.size());
+    //        fout.close();
+    //    }
+    //    
+    //}
+
+    MailMessage message;
+    message.gbkText = "我丢";
+
+    MailMessage::FileInfo file;
+    file.gbkName = "xxx.pdf"; 
+    file.binData = "123456";
+    message.files.push_back(file);
+
+    std::string s;
+    message.FormatTo(s);
+
     {
         nextCmdTag = tagGen.GetNextTag();
-        fetchRes.tag = nextCmdTag;
+        searchRes.tag = nextCmdTag;
 
-        msg = nextCmdTag + R"xxx( FETCH 1,2,3 (BODYSTRUCTURE BODY[1] BODY[2] BODY[3]))xxx" "\r\n";
+        msg = nextCmdTag + " APPEND &TipOultYUKg- {" + std::to_string(s.size()) + "}\r\n";
 
         ret = client.Write((uint8_t*)msg.c_str(), msg.size());
         if (ret < 0)
         {
-            LOG_FMT_ERROR("command FETCH, Write failed, %d", ret);
+            LOG_FMT_ERROR("command append, Write failed, %d", ret);
             return;
         }
 
-        ret = parser.WaitFetch(fetchRes);
+        AppendResponse tryAppendRes;
+        ret = parser.WaitAppend(tryAppendRes);
         if (ret < 0)
         {
-            LOG_FMT_ERROR("WaitFetch failed, %d", ret);
+            LOG_FMT_ERROR("WaitTryAppend failed, %d", ret);
             return;
         }
-    }
 
-    ImapQQParser qqParser;
-    std::vector<QQFetchResult> qqFetchResults;
-
-    qqParser.ParseBodyStructure(fetchRes, qqFetchResults);
-
-    qqParser.ParseBodySection(fetchRes, qqFetchResults);
-
-
-    for (auto& fetch : qqFetchResults)
-    {
-        for (auto& file : fetch.files)
+        ret = client.Write((uint8_t*)s.c_str(), s.size());
+        if (ret < 0)
         {
-            std::ofstream fout("./" + file.gbkName, std::ios::binary);
-            if (!fout) continue;
-            fout.write(&file.binData[0], file.binData.size());
-            fout.close();
+            LOG_FMT_ERROR("command append msg, Write failed, %d", ret);
+            return;
         }
-        
+
+        AppendResponse appendRes;
+        ret = parser.WaitAppend(appendRes);
+        if (ret < 0)
+        {
+            LOG_FMT_ERROR("WaitAppend failed, %d", ret);
+            return;
+        }
     }
 
     LOG_FMT_DEBUG("end...");
