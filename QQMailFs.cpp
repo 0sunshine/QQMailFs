@@ -200,10 +200,16 @@ void go(IOClientBase& client)
     message.FormatTo(s);
 
     {
-        nextCmdTag = tagGen.GetNextTag();
-        searchRes.tag = nextCmdTag;
+        AppendResponse tryAppendRes;
 
-        msg = nextCmdTag + " APPEND &TipOultYUKg- {" + std::to_string(s.size()) + "}\r\n";
+
+        nextCmdTag = tagGen.GetNextTag();
+        tryAppendRes.tag = nextCmdTag;
+        
+
+        std::string foldName = GbkTomUtf7("其他文件夹/再来一个测试文件夹");
+
+        msg = nextCmdTag + " APPEND " + foldName + " {" + std::to_string(s.size()) + "}\r\n";
 
         ret = client.Write((uint8_t*)msg.c_str(), msg.size());
         if (ret < 0)
@@ -212,7 +218,7 @@ void go(IOClientBase& client)
             return;
         }
 
-        AppendResponse tryAppendRes;
+
         ret = parser.WaitAppend(tryAppendRes);
         if (ret < 0)
         {
@@ -220,19 +226,24 @@ void go(IOClientBase& client)
             return;
         }
 
-        ret = client.Write((uint8_t*)s.c_str(), s.size());
-        if (ret < 0)
+        if (tryAppendRes.status != "NO")
         {
-            LOG_FMT_ERROR("command append msg, Write failed, %d", ret);
-            return;
-        }
+            AppendResponse appendRes;
+            appendRes.tag = tryAppendRes.tag;
+            ret = client.Write((uint8_t*)s.c_str(), s.size());
+            if (ret < 0)
+            {
+                LOG_FMT_ERROR("command append msg, Write failed, %d", ret);
+                return;
+            }
 
-        AppendResponse appendRes;
-        ret = parser.WaitAppend(appendRes);
-        if (ret < 0)
-        {
-            LOG_FMT_ERROR("WaitAppend failed, %d", ret);
-            return;
+
+            ret = parser.WaitAppend(appendRes);
+            if (ret < 0)
+            {
+                LOG_FMT_ERROR("WaitAppend failed, %d", ret);
+                return;
+            }
         }
     }
 

@@ -7,8 +7,11 @@
 #include <string_view>
 
 std::string mUtf7ToUnicode16le(const std::string& in);
+std::string Unicode16leTomUtf7(const std::string& in);
 std::string Unicode16leToGbk(const std::string& in);
+std::string GbkToUnicode16le(const std::string& in);
 std::string mUtf7ToGbk(const std::string& in);
+std::string GbkTomUtf7(const std::string& in);
 std::string Utf8ToGbk(const std::string& in);
 std::string GbkToUtf8(const std::string& in);
 std::string Base64ToGbk(const std::string& in);

@@ -1,3 +1,4 @@
+#include "Log.h"
 #include "Util.h"
 #include "base64.h"
 
@@ -5,94 +6,154 @@
 #include <iostream>
 #include <mutex>
 
-static const char* utf7_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
+/**
+ * 辅助函数：解码 Modified Base64 字符
+ * 返回 0-63 的值，如果是非法字符返回 -1
+ */
+int decode_imap_b64(char c) {
+    if (c >= 'A' && c <= 'Z') return c - 'A';
+    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+    if (c >= '0' && c <= '9') return c - '0' + 52;
+    if (c == '+') return 62;
+    if (c == ',') return 63; // 注意：标准Base64是'/'，这里是','
+    return -1;
+}
 
-static unsigned char utf7_rank[256] = {
-    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x3e,0x3f,0xff,0xff,0xff,
-    0x34,0x35,0x36,0x37,0x38,0x39,0x3a,0x3b,0x3c,0x3d,0xff,0xff,0xff,0xff,0xff,0xff,
-    0xff,0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,
-    0x0f,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0xff,0xff,0xff,0xff,0xff,
-    0xff,0x1a,0x1b,0x1c,0x1d,0x1e,0x1f,0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,
-    0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f,0x30,0x31,0x32,0x33,0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-};
+/**
+ * 将 IMAP Modified UTF-7 字符串转换为 Little Endian UTF-16 字节流
+ * 输入: std::string (例如 "&bUuL1Q-")
+ * 输出: std::string (存储字节流，例如 "\x4B\x6D\xD5\x8B")
+ */
+std::string mUtf7ToUnicode16le(const std::string& in) {
+    std::string result;
+    result.reserve(in.length() * 2); // UTF-16 至少是原长度的2倍（对于ASCII）
 
+    for (size_t i = 0; i < in.length(); ++i) {
+        char c = in[i];
 
-//uint16_t bom = 0xFEFF;
-//fout.write((char*)&bom, 2);
-std::string mUtf7ToUnicode16le(const std::string& in)
-{
-    std::string out;
-    out.reserve(in.size() * 2);
-
-    const unsigned char* inptr = (unsigned char*)in.c_str();
-    unsigned char c;
-    int shifted = 0;
-    uint32_t v = 0;
-    uint16_t u;
-    int i = 0;
-
-    while (*inptr) {
-        c = *inptr++;
-
-        if (shifted) {
-            if (c == '-') {
-                /* shifted back to US-ASCII */
-                shifted = 0;
+        if (c == '&') {
+            // 检查是否是转义的 '&-'
+            if (i + 1 < in.length() && in[i + 1] == '-') {
+                // 输出 '&' (0x0026) -> LE: 0x26, 0x00
+                result.push_back(0x26);
+                result.push_back(0x00);
+                i++; // 跳过 '-'
             }
             else {
-                /* base64 decode */
-                if (utf7_rank[c] == 0xff)
-                    goto exception;
+                // 进入 Base64 解码模式
+                i++; // 跳过 '&'
+                uint32_t bit_buffer = 0;
+                int bit_count = 0;
 
-                v = (v << 6) | utf7_rank[c];
-                i += 6;
+                //一直读取直到遇到 '-' 或字符串结束
+                while (i < in.length() && in[i] != '-') {
+                    int val = decode_imap_b64(in[i]);
+                    if (val != -1) {
+                        bit_buffer = (bit_buffer << 6) | val;
+                        bit_count += 6;
 
-                if (i >= 16) {
-                    u = (v >> (i - 16)) & 0xffff;
+                        // 每凑够 16 位，就输出一个 UTF-16 字符
+                        if (bit_count >= 16) {
+                            bit_count -= 16;
+                            // 提取出的 16 位是 Big Endian (因为网络序)
+                            uint16_t u16 = (bit_buffer >> bit_count) & 0xFFFF;
 
-                    char cc = (char)u;
-                    out.push_back(cc);
-
-                    cc = u >> 8;
-                    out.push_back(cc);
-
-                    i -= 16;
+                            // 转为 Little Endian 写入 result
+                            result.push_back(static_cast<char>(u16 & 0xFF));        // Low byte
+                            result.push_back(static_cast<char>((u16 >> 8) & 0xFF)); // High byte
+                        }
+                    }
+                    i++;
                 }
-            }
-        }
-        else if (c == '&') {
-            if (*inptr == '-') {
-                out.push_back('&');
-                inptr++;
-            }
-            else {
-                /* shifted to modified UTF-7 */
-                shifted = 1;
+                // 循环结束时 input[i] 应该是 '-'，循环外会自动 i++ 跳过它
             }
         }
         else {
-            out.push_back(c);
-            out.push_back(0x00);
+            // 普通 ASCII 字符 (0x00XX) -> LE: XX, 00
+            result.push_back(c);
+            result.push_back(0x00);
         }
     }
 
-    if (shifted) {
-    exception:
-        g_warning("Invalid UTF-7 encoded string: '%s'", in);
+    return result;
+}
+
+/**
+ * 将存储在 std::string 中的 Little Endian UTF-16 字节流转换为 IMAP Modified UTF-7
+ * * 输入: std::string (包含原始字节，如 "a\0b\0" 代表 "ab")
+ * 输出: std::string (IMAP 文件夹编码格式)
+ */
+std::string Unicode16leTomUtf7(const std::string& in) {
+    // 检查字节数是否为偶数 (UTF-16 必须是 2 字节对齐)
+    if (in.size() % 2 != 0) {
         return "";
     }
 
-    return out;
+    std::string result;
+    result.reserve(in.size());
+
+    const char* b64_tbl = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
+    bool in_shift = false;
+    uint32_t bit_buffer = 0;
+    int bit_count = 0;
+
+    // 辅助 lambda: 关闭 Base64 模式
+    auto close_shift = [&](std::string& res, uint32_t& buf, int& bits, bool& shift) {
+        if (shift) {
+            if (bits > 0) {
+                res += b64_tbl[(buf << (6 - bits)) & 0x3F];
+            }
+            res += '-';
+            shift = false;
+            buf = 0;
+            bits = 0;
+        }
+        };
+
+    // 步长为 2，每次处理两个字节
+    for (size_t i = 0; i + 1 < in.size(); i += 2) {
+        // 关键点：手动拼合 Little Endian 字节
+        // 必须先转为 unsigned char 防止符号位扩展导致的计算错误
+        unsigned char low = static_cast<unsigned char>(in[i]);
+        unsigned char high = static_cast<unsigned char>(in[i + 1]);
+
+        // 组合成 16 位字符值
+        uint16_t c = (static_cast<uint16_t>(high) << 8) | low;
+
+        // ---------------------------------------------------------
+        // 下面是标准的 Modified UTF-7 逻辑 
+        // ---------------------------------------------------------
+
+        // 检查是否为可打印 ASCII (0x20 - 0x7E)
+        if (c >= 0x20 && c <= 0x7E) {
+            close_shift(result, bit_buffer, bit_count, in_shift);
+
+            if (c == '&') {
+                result += "&-";
+            }
+            else {
+                result += static_cast<char>(c);
+            }
+        }
+        else {
+            if (!in_shift) {
+                result += '&';
+                in_shift = true;
+            }
+
+            // UTF-16BE 顺序推入缓冲区
+            bit_buffer = (bit_buffer << 16) | c;
+            bit_count += 16;
+
+            while (bit_count >= 6) {
+                bit_count -= 6;
+                result += b64_tbl[(bit_buffer >> bit_count) & 0x3F];
+            }
+        }
+    }
+
+    close_shift(result, bit_buffer, bit_count, in_shift);
+    return result;
 }
 
 std::string Unicode16leToGbk(const std::string& in)
@@ -102,7 +163,7 @@ std::string Unicode16leToGbk(const std::string& in)
     size_t in_len = in.size();
 
     std::string gbk_str;
-    gbk_str.resize(in.size());
+    gbk_str.resize(in.size() + 2);
 
     char* out_ptr = (char*)&gbk_str[0];
     size_t out_len = gbk_str.size();
@@ -124,11 +185,47 @@ std::string Unicode16leToGbk(const std::string& in)
     return gbk_str;
 }
 
+std::string GbkToUnicode16le(const std::string& in)
+{
+    const char* gbk_str = in.c_str();
+    char* in_ptr = (char*)gbk_str;
+    size_t in_len = in.size();
+
+    std::string utf16_str;
+    utf16_str.resize(in.size() + 2);
+
+    char* out_ptr = (char*)&utf16_str[0];
+    size_t out_len = utf16_str.size();
+
+    iconv_t cd = iconv_open("UTF-16LE", "GBK");
+
+    if ((iconv_t)-1 == cd)
+    {
+        std::cout << errno << std::endl;
+        return "";
+    }
+
+    size_t result = iconv(cd, &in_ptr, &in_len, &out_ptr, &out_len);
+    iconv_close(cd);
+
+    utf16_str.resize(utf16_str.size() - out_len);
+    //*out_ptr = '\0'; // 添加字符串结束符
+
+    return utf16_str;
+}
+
 std::string mUtf7ToGbk(const std::string& in)
 {
     std::string u16 = mUtf7ToUnicode16le(in);
 
     return Unicode16leToGbk(u16);
+}
+
+std::string GbkTomUtf7(const std::string& in)
+{
+    std::string u16 = GbkToUnicode16le(in);
+
+    return Unicode16leTomUtf7(u16);
 }
 
 std::string Utf8ToGbk(const std::string& in)
@@ -138,7 +235,7 @@ std::string Utf8ToGbk(const std::string& in)
     size_t in_len = in.size();
 
     std::string gbk_str;
-    gbk_str.resize(in.size());
+    gbk_str.resize(in.size() + 1);
 
     char* out_ptr = (char*)&gbk_str[0];
     size_t out_len = gbk_str.size();
@@ -167,7 +264,7 @@ std::string GbkToUtf8(const std::string& in)
     size_t in_len = in.size();
 
     std::string utf8_str;
-    utf8_str.resize(in.size() * 4);
+    utf8_str.resize(in.size() * 4 + 1);
 
     char* out_ptr = (char*)&utf8_str[0];
     size_t out_len = utf8_str.size();
