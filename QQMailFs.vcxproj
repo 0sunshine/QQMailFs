@@ -142,6 +142,7 @@
     <ClCompile Include="ImapResponseParser.cpp" />
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="MailMessage.cpp" />
+    <ClCompile Include="QQMailContext.cpp" />
     <ClCompile Include="QQMailFs.cpp" />
     <ClCompile Include="Util.cpp" />
   </ItemGroup>
@@ -153,6 +154,7 @@
     <ClInclude Include="IOSchedulerBase.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="MailMessage.h" />
+    <ClInclude Include="QQMailContext.h" />
     <ClInclude Include="Util.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -8,6 +8,7 @@
 
 #include <fstream>
 #include "MailMessage.h"
+#include "QQMailContext.h"
 
 std::string gUsername;
 std::string gPassword;
@@ -39,6 +40,24 @@ int main(int argc, char* argv[])
 void go(IOClientBase& client)
 {
     int ret = 0;
+
+    QQMailContext qqMailContext(client, gUsername, gPassword);
+    ret = qqMailContext.Login();
+    if (ret < 0)
+    {
+        LOG_FMT_ERROR("Login failed");
+        return;
+    }
+
+    std::vector<std::string> folders;
+    ret = qqMailContext.ListFolders(folders, "其他文件夹");
+    if (ret < 0)
+    {
+        LOG_FMT_ERROR("ListFolders failed");
+        return;
+    }
+
+    
     ImapResponseParser parser(client);
     ImapTagGen tagGen = ImapTagGen::Create();
 
@@ -52,27 +71,6 @@ void go(IOClientBase& client)
     std::string nextCmdTag;
     std::string msg;
 
-    LoginResponse loginRes;
-    {
-        nextCmdTag = tagGen.GetNextTag();
-        loginRes.tag = nextCmdTag;
-
-        msg = nextCmdTag + " LOGIN " + gUsername + " " + gPassword + "\r\n";
-
-        ret = client.Write((uint8_t*)msg.c_str(), msg.size());
-        if (ret < 0)
-        {
-            LOG_FMT_ERROR("command LOGIN, Write failed, %d", ret);
-            return;
-        }
-
-        ret = parser.WaitLogin(loginRes);
-        if (ret < 0)
-        {
-            LOG_FMT_ERROR("WaitLogin failed, %d", ret);
-            return;
-        }
-    }
     
     ListResponse listRes;
     {

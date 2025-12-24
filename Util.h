@@ -18,6 +18,10 @@ std::string Base64ToGbk(const std::string& in);
 std::string Base64Decode(const std::string_view& in);
 std::string Base64Encode(const std::string_view& in);
 
+static const std::string& ImapOK = "OK";
+static const std::string& ImapNO = "NO";
+static const std::string& ImapBAD = "BAD";
+
 class ImapTagGen
 {
 public:

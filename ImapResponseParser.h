@@ -118,7 +118,7 @@ struct AppendResponse
 
 class ImapResponseParser
 {
-    static const int BufferSize = 1024 * 64;
+    static const int BufferSize = 1024 * 16;
 
 public:
     ImapResponseParser(IOClientBase& client);
