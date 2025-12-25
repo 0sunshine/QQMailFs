@@ -269,7 +269,7 @@ std::string GbkToUtf8(const std::string& in)
     char* out_ptr = (char*)&utf8_str[0];
     size_t out_len = utf8_str.size();
 
-    iconv_t cd = iconv_open("gbk", "utf-8");
+    iconv_t cd = iconv_open("utf-8", "gbk");
 
     if ((iconv_t)-1 == cd)
     {

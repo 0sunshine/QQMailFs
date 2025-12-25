@@ -57,6 +57,10 @@ void go(IOClientBase& client)
         return;
     }
 
+    std::string errMsg;
+    std::filesystem::path path = "D:/u盘/工具/cq程序/UML和模式应用(原书第3版).pdf";
+    ret = qqMailContext.Upload(path, "其他文件夹/再来一个测试文件夹", errMsg);
+
     
     ImapResponseParser parser(client);
     ImapTagGen tagGen = ImapTagGen::Create();

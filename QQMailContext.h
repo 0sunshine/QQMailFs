@@ -5,6 +5,7 @@
 #include "ImapResponseParser.h"
 
 #include <string>
+#include <filesystem>
 
 class QQMailContext
 {
@@ -13,6 +14,7 @@ public:
 
     int Login();
     int ListFolders(std::vector<std::string>& folders, const std::string& reference = "");
+    int Upload(std::filesystem::path& file, const std::string& remote_folder, std::string& err);
 
 private:
     IOClientBase& _client;

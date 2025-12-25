@@ -2,6 +2,9 @@
 
 #include "QQMailContext.h"
 
+#include <fstream>
+#include <sstream>
+#include "MailMessage.h"
 
 QQMailContext::QQMailContext(IOClientBase& client, const std::string& user, const std::string& passwd)
     :
@@ -64,7 +67,7 @@ int QQMailContext::ListFolders(std::vector<std::string>& folders, const std::str
 {
     if (!_isLogined)
     {
-        LOG_FMT_ERROR("%s", "has been logined");
+        LOG_FMT_ERROR("%s", "not login");
         return -1;
     }
 
@@ -99,6 +102,148 @@ int QQMailContext::ListFolders(std::vector<std::string>& folders, const std::str
     for (auto& x : listRes.items)
     {
         folders.emplace_back(std::move(x.gbkName));
+    }
+
+    return 0;
+}
+
+int QQMailContext::Upload(std::filesystem::path& file, const std::string& remoteFolder, std::string& errMsg)
+{
+    if (!_isLogined)
+    {
+        errMsg = "not login";
+        LOG_FMT_ERROR("%s", errMsg.c_str());
+        return -1;
+    }
+
+    std::error_code err;
+
+    if (!std::filesystem::is_regular_file(file, err))
+    {
+        errMsg = file.string() + " not exist";
+        LOG_FMT_ERROR("%s", errMsg.c_str());
+        return -1;
+    }
+
+    if (err)
+    {
+        errMsg = "error: " + err.message();
+        LOG_FMT_ERROR("%s", errMsg.c_str());
+        return -1;
+    }
+
+
+
+    MailMessage message;
+
+    message.files.emplace_back();
+    MailMessage::FileInfo& f = message.files.back();
+
+    f.gbkName = file.filename().string();
+
+    const uintmax_t fileSize = std::filesystem::file_size(file, err);
+    if (err)
+    {
+        errMsg = "error: " + err.message();
+        LOG_FMT_ERROR("%s", errMsg.c_str());
+        return -1;
+    }
+
+    f.binData.reserve(fileSize);
+
+    {
+        const int tmpBufferSize = 1024 * 512;
+        std::unique_ptr<char[]> tmpBuffer{ new char[tmpBufferSize] };
+
+        std::ifstream fin(file.string(), std::ios::in | std::ios::binary);
+        if (!fin)
+        {
+            errMsg = file.string() + " open failed";
+            LOG_FMT_ERROR("%s", errMsg.c_str());
+            return -1;
+        }
+
+        while (fin)
+        {
+            fin.read(tmpBuffer.get(), tmpBufferSize);
+            std::streamsize bytes = fin.gcount();
+
+            f.binData.append(tmpBuffer.get(), bytes);
+        }
+
+        fin.close();
+    }
+
+    
+    if (f.binData.size() != fileSize)
+    {
+        errMsg = "error: read size not equal file size";
+        LOG_FMT_ERROR("%s", errMsg.c_str());
+        return -1;
+    }
+
+    std::string s;
+    message.FormatTo(s);
+
+    AppendResponse tryAppendRes;
+    tryAppendRes.tag = _tagGen.GetNextTag();
+
+    std::string mUtf7FolderName = GbkTomUtf7(remoteFolder);
+    std::string cmdMsg = tryAppendRes.tag + " APPEND " + mUtf7FolderName + " {" + std::to_string(s.size()) + "}\r\n";
+
+    int ret = _client.Write((uint8_t*)cmdMsg.c_str(), cmdMsg.size());
+    if (ret < 0)
+    {
+        errMsg = "command append, Write failed, " + std::to_string(ret);
+        LOG_FMT_ERROR("%s", errMsg.c_str());
+        return -1;
+    }
+
+    ret = _parser.WaitAppend(tryAppendRes);
+    if (ret < 0)
+    {
+        errMsg = "WaitTryAppend failed, " + std::to_string(ret);
+        LOG_FMT_ERROR("%s", errMsg.c_str());
+        return -1;
+    }
+
+    if (tryAppendRes.status == ImapNO || tryAppendRes.status == ImapBAD)
+    {
+        errMsg = "error: tryAppendRes.status " + tryAppendRes.status;
+        LOG_FMT_ERROR("%s", errMsg.c_str());
+        return -1;
+    }
+
+    AppendResponse appendRes;
+    appendRes.tag = tryAppendRes.tag;
+    
+    std::streamsize sendBytes = 0;
+
+
+    const int eachSendFixedSize = 1024 * 1024 * 1;
+    while (sendBytes < s.size())
+    {
+        int nextSendSize = (sendBytes + eachSendFixedSize) > s.size() ? (s.size() - sendBytes) : eachSendFixedSize;
+
+        ret = _client.Write((uint8_t*)(s.c_str() + sendBytes), nextSendSize);
+        if (ret < 0)
+        {
+            errMsg = "error: appendRes write";
+            LOG_FMT_ERROR("%s", errMsg.c_str());
+            return -1;
+        }
+
+        sendBytes += nextSendSize;
+
+        LOG_FMT_INFO("->file (%s) upload progress: %d/%d, %0.2lf%%", file.string().c_str(), (int)sendBytes, (int)s.size(), (double)sendBytes / (int)s.size() * 100);
+    }
+
+    ret = _parser.WaitAppend(appendRes);
+    if (ret < 0)
+    {
+        errMsg = "WaitAppend failed, " + std::to_string(ret);
+        LOG_FMT_ERROR("%s", errMsg.c_str());
+        return -1;
     }
 
     return 0;
