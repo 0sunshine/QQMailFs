@@ -32,7 +32,7 @@ MTIzNDU2
 
 
 
-bool MailMessage::FormatTo(std::string& result)
+bool MailMessage::FormatTo(std::string& result) const
 {
     std::string strTmp;
     strTmp.reserve(1024 * 1024 * 1); //1M
@@ -50,10 +50,17 @@ bool MailMessage::FormatTo(std::string& result)
     strTmp = strTmp + "--" + strBoundary + "\r\n";
 
     strTmp = strTmp + "Content-Type: text/html; charset=utf-8\r\n";
-    strTmp = strTmp + "Content-Transfer-Encoding: 8bit\r\n";
-    strTmp = strTmp + GbkToUtf8(gbkText) + "\r\n";
+    strTmp = strTmp + "Content-Transfer-Encoding: base64\r\n";
+
+    for (auto& line : gbkTextLines)
+    {
+        strTmp = strTmp + Base64Encode("<p>" + GbkToUtf8(line) + "</p>") + "\r\n";
+    }
+
 
     strTmp += "\r\n";
+    
+
     strTmp = strTmp + "--" + strBoundary + "\r\n";
 
     for (auto& file : files)

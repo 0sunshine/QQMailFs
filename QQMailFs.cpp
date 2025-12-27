@@ -58,7 +58,7 @@ void go(IOClientBase& client)
     }
 
     std::string errMsg;
-    std::filesystem::path path = "D:/u盘/工具/cq程序/UML和模式应用(原书第3版).pdf";
+    std::filesystem::path path = "F:/迅雷云盘/Detective.Chinatown.1900.2025.2160p.HDR.60fps.WEB-DL.HEVC.DDP5.1-GyWEB.mp4";
     ret = qqMailContext.Upload(path, "其他文件夹/再来一个测试文件夹", errMsg);
 
     
@@ -83,7 +83,7 @@ void go(IOClientBase& client)
 
         msg = nextCmdTag + R"xxx( LIST "" "*")xxx""\r\n";
 
-        ret = client.Write((uint8_t*)msg.c_str(), msg.size());
+        ret = client.Write((uint8_t*)msg.c_str(), (int)msg.size());
         if (ret < 0)
         {
             LOG_FMT_ERROR("command LIST, Write failed, %d", ret);
@@ -111,7 +111,7 @@ void go(IOClientBase& client)
 
         msg = nextCmdTag + R"xxx( SELECT "&TipOultYUKg-")xxx""\r\n";
 
-        ret = client.Write((uint8_t*)msg.c_str(), msg.size());
+        ret = client.Write((uint8_t*)msg.c_str(), (int)msg.size());
         if (ret < 0)
         {
             LOG_FMT_ERROR("command SELECT, Write failed, %d", ret);
@@ -133,7 +133,7 @@ void go(IOClientBase& client)
 
         msg = nextCmdTag + R"xxx( SEARCH ALL)xxx""\r\n";
 
-        ret = client.Write((uint8_t*)msg.c_str(), msg.size());
+        ret = client.Write((uint8_t*)msg.c_str(), (int)msg.size());
         if (ret < 0)
         {
             LOG_FMT_ERROR("command Search, Write failed, %d", ret);
@@ -191,7 +191,7 @@ void go(IOClientBase& client)
     //}
 
     MailMessage message;
-    message.gbkText = "我丢";
+    message.gbkTextLines.push_back("我丢");
 
     MailMessage::FileInfo file;
     file.gbkName = "xxx.pdf"; 
@@ -213,7 +213,7 @@ void go(IOClientBase& client)
 
         msg = nextCmdTag + " APPEND " + foldName + " {" + std::to_string(s.size()) + "}\r\n";
 
-        ret = client.Write((uint8_t*)msg.c_str(), msg.size());
+        ret = client.Write((uint8_t*)msg.c_str(), (int)msg.size());
         if (ret < 0)
         {
             LOG_FMT_ERROR("command append, Write failed, %d", ret);
@@ -232,7 +232,7 @@ void go(IOClientBase& client)
         {
             AppendResponse appendRes;
             appendRes.tag = tryAppendRes.tag;
-            ret = client.Write((uint8_t*)s.c_str(), s.size());
+            ret = client.Write((uint8_t*)s.c_str(), (int)s.size());
             if (ret < 0)
             {
                 LOG_FMT_ERROR("command append msg, Write failed, %d", ret);

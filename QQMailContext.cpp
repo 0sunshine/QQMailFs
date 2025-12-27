@@ -6,6 +6,34 @@
 #include <sstream>
 #include "MailMessage.h"
 
+struct MessageSubjectDesc
+{
+    std::string fileName;
+    std::string encryption = "plain";
+    int64_t blockSeq = 0;
+    int64_t blockCount = 0;
+
+    std::string to();
+    bool from(const std::string& subject);
+};
+
+
+struct MessageTextDesc
+{
+    std::string fileMd5;
+    int64_t fileSize = 0;
+    int64_t blockSize = 0;
+    std::string createTime;
+    std::string owner = "sunshine";
+    std::string localPath;
+    std::string mailFolder;
+
+    std::list<std::string> to();
+    bool from(const std::string& text);
+};
+
+
+
 QQMailContext::QQMailContext(IOClientBase& client, const std::string& user, const std::string& passwd)
     :
     _client(client), 
@@ -132,15 +160,6 @@ int QQMailContext::Upload(std::filesystem::path& file, const std::string& remote
         return -1;
     }
 
-
-
-    MailMessage message;
-
-    message.files.emplace_back();
-    MailMessage::FileInfo& f = message.files.back();
-
-    f.gbkName = file.filename().string();
-
     const uintmax_t fileSize = std::filesystem::file_size(file, err);
     if (err)
     {
@@ -149,41 +168,92 @@ int QQMailContext::Upload(std::filesystem::path& file, const std::string& remote
         return -1;
     }
 
-    f.binData.reserve(fileSize);
-
+    std::ifstream fin(file.string(), std::ios::in | std::ios::binary);
+    if (!fin)
     {
-        const int tmpBufferSize = 1024 * 512;
-        std::unique_ptr<char[]> tmpBuffer{ new char[tmpBufferSize] };
-
-        std::ifstream fin(file.string(), std::ios::in | std::ios::binary);
-        if (!fin)
-        {
-            errMsg = file.string() + " open failed";
-            LOG_FMT_ERROR("%s", errMsg.c_str());
-            return -1;
-        }
-
-        while (fin)
-        {
-            fin.read(tmpBuffer.get(), tmpBufferSize);
-            std::streamsize bytes = fin.gcount();
-
-            f.binData.append(tmpBuffer.get(), bytes);
-        }
-
-        fin.close();
-    }
-
-    
-    if (f.binData.size() != fileSize)
-    {
-        errMsg = "error: read size not equal file size";
+        errMsg = file.string() + " open failed";
         LOG_FMT_ERROR("%s", errMsg.c_str());
         return -1;
     }
 
+    
+    int ret = 0;
+    const int tmpBufferSize = 1024 * 1024 * 32; //32M
+    std::unique_ptr<char[]> tmpBuffer{ new char[tmpBufferSize] };
+    const int blockCount = fileSize / tmpBufferSize + (fileSize % tmpBufferSize == 0 ? 0 : 1);
+
+    for (int blockSeq = 1; blockSeq <= blockCount; ++blockSeq)
+    {
+        fin.read(tmpBuffer.get(), tmpBufferSize);
+        std::streamsize blockSize = fin.gcount();
+        if (blockSize <= 0)
+        {
+            errMsg = "last block size: " + blockSize;
+            LOG_FMT_ERROR("%s", errMsg.c_str());
+            return -1;
+        }
+
+        MailMessage message;
+
+        MessageSubjectDesc subjectDesc;
+        subjectDesc.fileName = file.filename().string();
+        subjectDesc.blockSeq = blockSeq;
+        subjectDesc.blockCount = blockCount;
+
+        MessageTextDesc textDesc;
+        textDesc.fileSize = fileSize;
+        textDesc.blockSize = blockSize;
+        textDesc.localPath = file.string();
+        textDesc.mailFolder = remoteFolder;
+
+        message.subject = subjectDesc.to();
+        message.gbkTextLines = textDesc.to();
+
+        message.files.emplace_back();
+        MailMessage::FileInfo& f = message.files.back();
+        f.gbkName = file.filename().string();
+        f.binData.reserve(blockSize);
+        f.binData.append(tmpBuffer.get(), blockSize);
+
+        ret = Upload(message, remoteFolder, errMsg);
+        if (ret < 0)
+        {
+            errMsg = "Upload message error, subject: " + message.subject;
+            LOG_FMT_ERROR("%s", errMsg.c_str());
+            return -1;
+        }
+
+        if (!fin)
+        {
+            break;
+        }
+    }
+
+    fin.close();
+
+    
+    //if (f.binData.size() != fileSize)
+    //{
+    //    errMsg = "error: read size not equal file size";
+    //    LOG_FMT_ERROR("%s", errMsg.c_str());
+    //    return -1;
+    //}
+
+
+
+    return 0;
+}
+
+int QQMailContext::Upload(const MailMessage& message, const std::string& remoteFolder, std::string& errMsg)
+{
     std::string s;
     message.FormatTo(s);
+
+    //{
+    //    std::ofstream fout("debug.log", std::ios::ate | std::ios::binary);
+    //    fout.write(&s[0], s.size());
+    //    fout.close();
+    //}
 
     AppendResponse tryAppendRes;
     tryAppendRes.tag = _tagGen.GetNextTag();
@@ -216,7 +286,7 @@ int QQMailContext::Upload(std::filesystem::path& file, const std::string& remote
 
     AppendResponse appendRes;
     appendRes.tag = tryAppendRes.tag;
-    
+
     std::streamsize sendBytes = 0;
 
 
@@ -235,7 +305,7 @@ int QQMailContext::Upload(std::filesystem::path& file, const std::string& remote
 
         sendBytes += nextSendSize;
 
-        LOG_FMT_INFO("->file (%s) upload progress: %d/%d, %0.2lf%%", file.string().c_str(), (int)sendBytes, (int)s.size(), (double)sendBytes / (int)s.size() * 100);
+        LOG_FMT_INFO("->subject (%s) upload progress: %d/%d, %0.2lf%%", message.subject.c_str(), (int)sendBytes, (int)s.size(), (double)sendBytes / (int)s.size() * 100);
     }
 
     ret = _parser.WaitAppend(appendRes);
@@ -247,4 +317,39 @@ int QQMailContext::Upload(std::filesystem::path& file, const std::string& remote
     }
 
     return 0;
+}
+
+std::string MessageSubjectDesc::to()
+{
+    std::string subject =
+        fileName + "/" +
+        "plain/" +
+        std::to_string(blockSeq) + "-" + std::to_string(blockCount) + "/";
+
+    return subject;
+}
+
+bool MessageSubjectDesc::from(const std::string& subject)
+{
+    return false;
+}
+
+std::list<std::string> MessageTextDesc::to()
+{
+    std::list<std::string> lines;
+
+    lines.push_back("filemd5: " + fileMd5);
+    lines.push_back("filesize: " + std::to_string(fileSize));
+    lines.push_back("blocksize: " + std::to_string(blockSize));
+    lines.push_back("createtime: " + createTime);
+    lines.push_back("owner: " + owner);
+    lines.push_back("localpath: " + localPath);
+    lines.push_back("mailfolder: " + mailFolder);
+
+    return lines;
+}
+
+bool MessageTextDesc::from(const std::string& text)
+{
+    return false;
 }

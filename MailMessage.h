@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <list>
 
 struct MailMessage
 {
@@ -16,9 +17,9 @@ struct MailMessage
         std::string binData;
     };
 
-    std::string gbkText;
+    std::list<std::string> gbkTextLines;
     std::vector<FileInfo> files;
 
-    bool FormatTo(std::string& result);
+    bool FormatTo(std::string& result) const;
 };
 

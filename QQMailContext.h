@@ -3,6 +3,7 @@
 #include "Util.h"
 #include "IOSchedulerBase.h"
 #include "ImapResponseParser.h"
+#include "MailMessage.h"
 
 #include <string>
 #include <filesystem>
@@ -14,7 +15,10 @@ public:
 
     int Login();
     int ListFolders(std::vector<std::string>& folders, const std::string& reference = "");
-    int Upload(std::filesystem::path& file, const std::string& remote_folder, std::string& err);
+    int Upload(std::filesystem::path& file, const std::string& remoteFolder, std::string& errMsg);
+
+private:
+    int Upload(const MailMessage& message, const std::string& remoteFolder, std::string& errMsg);
 
 private:
     IOClientBase& _client;
